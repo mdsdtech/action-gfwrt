@@ -1,0 +1,10 @@
+
+config global
+	option primary '#5f4b8b'
+	option dark_primary '#5f4b8b'
+	option blur '0'
+	option blur_dark '0'
+	option transparency '0.5'
+	option transparency_dark '0.5'
+	option mode 'normal'
+	option online_wallpaper 'none'

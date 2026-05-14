@@ -1,0 +1,28 @@
+#!/bin/sh
+
+# --- System Configuration ---
+# Set hostname
+uci set system.@system[0].hostname='GFriendWRT'
+
+# Set timezone and zonename
+uci set system.@system[0].timezone='<+08>-8'
+uci set system.@system[0].zonename='Asia/Singapore'
+uci commit system
+
+# --- System Security ---
+# Set root password to 'root'
+echo -e "root\nroot" | passwd root
+
+# --- Luci Configuration ---
+# Set Luci theme to Argon (Ensure the theme is installed first)
+uci set luci.main.mediaurlbase='/luci-static/argon'
+uci commit luci
+
+# --- Modem Cycle Configuration ---
+chmod +x /etc/init.d/modemcycle
+
+# --- Modem Cycle Configuration ---
+chmod +x /etc/init.d/wifi-reset
+
+# No reload commands needed for uci-defaults
+exit 0

@@ -1,0 +1,19 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2022 MDSDTech <daniel@mdsdtech.my.id>
+
+START=99
+STOP=15
+
+stop() {
+    # Check if any of the specified device files exist or if the PCI device is detected
+    if [ -e /dev/mhi_DUN ] || [ -e /dev/mhi_LOOPBACK ] || [ -e /dev/mhi_QMI0 ] || [ -e /dev/mhi_MBIM0 ] || \
+       lspci -n | grep -q "0003:01:00.0 ff00: 17cb:0308"; then
+        echo "Modem or PCI device found, powering off the modem before reboot..."
+        # Send AT command to power off the modem via /dev/mhi_DUN
+        echo -e "AT+QPOWD=1\r" > /dev/mhi_DUN
+        # Optionally, wait for 5 seconds to ensure the modem powers off
+        sleep 5
+    else
+        echo "No relevant modem device files or PCI device found, skipping power off."
+    fi
+}

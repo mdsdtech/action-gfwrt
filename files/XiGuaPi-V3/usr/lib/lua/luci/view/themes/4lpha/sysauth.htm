@@ -1,0 +1,53 @@
+<%# Copyright 2021 Jo-Philipp Wich <jo@mein.io>
+	Copyright 2021-2025 Derisamedia (Muhamad Deri Sahertian) <yuimizuno86@gmail.com>
+		Licensed to the public under the Apache License 2.0.
+		-%>
+
+		<% -- Explicitly set blank_page in the global environment if possible -- and define it locally for this scope
+			blank_page=true if _G then _G.blank_page=true end %>
+
+			<%+header%>
+
+				<div class="login-page">
+					<div class="login-card">
+						<div class="login-header">
+							<img src="<%=media%>/alpha-os.png" alt="AlphaOS" class="login-brand">
+						</div>
+
+						<% if fuser then %>
+							<div class="login-alert">
+								<%:Invalid username and/or password! Please try again.%>
+							</div>
+							<% end %>
+
+								<form method="post">
+									<div class="login-form-group">
+										<label class="login-label" for="luci_username">
+											<%:Username%>
+										</label>
+										<input class="login-input" name="luci_username" id="luci_username" type="text"
+											autocomplete="username" <%=attr("value", duser)%> placeholder="<%:Enter your
+											username%>">
+									</div>
+
+									<div class="login-form-group">
+										<label class="login-label" for="luci_password">
+											<%:Password%>
+										</label>
+										<input class="login-input" name="luci_password" id="luci_password"
+											type="password" autocomplete="current-password"
+											placeholder="<%:Enter your password%>">
+									</div>
+
+									<button type="submit" class="login-btn">
+										<%:Log in%>
+									</button>
+								</form>
+
+								<div class="login-footer">
+									<small>🤍💙💜 GFriendWRT 🤍💙💜 <br>by<br>🦅 MDSDTech 🦅<br> V260430</small>
+								</div>
+					</div>
+				</div>
+
+				<%+footer%>
