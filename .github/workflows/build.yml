@@ -23,7 +23,7 @@ jobs:
           #   version: 24.10.6
           #   gcc_version: 13.3.0
           #   release:
-          #   custom_pkgs: "luci-app-modeminfo modemmanager" # packages from your feed to compile
+          #   custom_pkgs: "luci-app-modeminfo modemmanager"
           # - device: BPI-R4
           #   target: mediatek
           #   subtarget: filogic
@@ -37,7 +37,7 @@ jobs:
             profile: nlnet_xiguapi-v3
             version: 24.10.6
             gcc_version: 13.3.0
-            custom_pkgs: "luci-app-hypermodem luci-app-modeminfo-quectel luci-app-qmodem-next luci-app-qmodem-ttlfw4 luci-app-qmodem-monitor" # no custom packages needed
+            custom_pkgs: "luci-app-hypermodem luci-app-modeminfo-quectel luci-app-qmodem-next luci-app-qmodem-ttlfw4 luci-app-qmodem-monitor"
           # - device: MangoPi-M28C
           #   target: rockchip
           #   subtarget: armv8
@@ -70,7 +70,8 @@ jobs:
         if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
           mkdir -p sdk && cd sdk
-          URL="https://downloads.immortalwrt.org/releases/${{ matrix.version }}/targets/${{ matrix.target }}/${{ matrix.subtarget }}/immortalwrt-sdk-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+          # Note: For 25.12 the archive name or format might differ – adjust if necessary.
+          URL="https://downloads.immortalwrt.org/releases/${{ matrix.version }}/targets/${{ matrix.target }}/${{ matrix.subtarget }}/immortalwrt-sdk-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}_${{ matrix.gcc_version }}_musl.Linux-x86_64.tar.zst"
           wget -qO- "$URL" | tar xJ --strip-components=1
 
       # ------------------------------------------------------------------
@@ -87,16 +88,24 @@ jobs:
         if: steps.cache-ib.outputs.cache-hit != 'true'
         run: |
           mkdir -p imagebuilder && cd imagebuilder
-          URL="https://downloads.immortalwrt.org/releases/${{ matrix.version }}/targets/${{ matrix.target }}/${{ matrix.subtarget }}/immortalwrt-imagebuilder-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}.Linux-x86_64.tar.xz"
+          URL="https://downloads.immortalwrt.org/releases/${{ matrix.version }}/targets/${{ matrix.target }}/${{ matrix.subtarget }}/immortalwrt-imagebuilder-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}.Linux-x86_64.tar.zst"
           wget -qO- "$URL" | tar xJ --strip-components=1
 
       # ------------------------------------------------------------------
-      # Add your custom feed
+      # Add your custom feeds and directly cloned packages
       # ------------------------------------------------------------------
       - name: Add custom feed to SDK
         working-directory: sdk
         run: |
           echo "src-git custom https://github.com/mdsdtech/modem_feeds;custom" >> feeds.conf.default
+          echo "src-git openwrt-bandix https://github.com/timsaya/openwrt-bandix;main" >> feeds.conf.default
+          echo "src-git luci-bandix https://github.com/timsaya/luci-app-bandix;main" >> feeds.conf.default
+          # Directly clone a package (if you later switch to pre‑compiled, you can remove this)
+          git clone --depth 1 --branch master --single-branch --no-checkout https://github.com/muink/luci-app-tinyfilemanager.git package/luci-app-tinyfilemanager
+          pushd package/luci-app-tinyfilemanager
+          umask 022
+          git checkout
+          popd
 
       - name: Update and install feeds
         working-directory: sdk
@@ -105,7 +114,7 @@ jobs:
           ./scripts/feeds install -a
 
       # ------------------------------------------------------------------
-      # ★ ONLY COMPILE THE PACKAGES YOU SPECIFIED ★
+      # Build only the packages you specified in the matrix
       # ------------------------------------------------------------------
       - name: Apply custom package compile-time options
         working-directory: sdk
@@ -122,7 +131,6 @@ jobs:
       - name: Set package names to compile
         id: pkgnames
         run: |
-          # Directly use the matrix variable; it may be empty
           echo "names=${{ matrix.custom_pkgs }}" >> $GITHUB_OUTPUT
 
       - name: Build custom packages (if any)
@@ -135,21 +143,45 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Collect compiled .ipk files
+      # ★ FIXED: Collect compiled packages – now works with both .ipk and .apk
+      - name: Collect compiled packages
         if: steps.pkgnames.outputs.names != ''
         run: |
-          mkdir -p collected-packages
+          rm -rf collected-packages && mkdir -p collected-packages
           for pkg in ${{ steps.pkgnames.outputs.names }}; do
-            find sdk/bin/packages/ -name "${pkg}_*.ipk" -exec cp {} collected-packages/ \;
+            find sdk/bin/packages/ -name "${pkg}_*" \( -name "*.ipk" -o -name "*.apk" \) \
+              -exec cp {} collected-packages/ \;
           done
 
-      # ------------------------------------------------------------------
-      # Assemble final image
-      # ------------------------------------------------------------------
-      - name: Copy .ipk files into ImageBuilder
-        if: steps.pkgnames.outputs.names != ''
+      # Determine target architecture from the SDK
+      - name: Determine package architecture from SDK
+        id: arch
+        working-directory: sdk
         run: |
-          cp collected-packages/*.ipk imagebuilder/packages/ 2>/dev/null || true
+          ARCH=$(ls bin/packages/ | head -1)
+          echo "arch=$ARCH" >> $GITHUB_OUTPUT
+
+      # Add pre‑compiled packages for the current version & architecture (e.g., precompiled/24.10.6/aarch64_cortex-a76/)
+      - name: Add pre-compiled packages for this version and architecture
+        if: steps.arch.outputs.arch != ''
+        run: |
+          ARCH="${{ steps.arch.outputs.arch }}"
+          VERDIR="precompiled/${{ matrix.version }}/$ARCH"
+          if [ -d "$VERDIR" ]; then
+            cp "$VERDIR"/* imagebuilder/packages/
+            echo "Added pre-compiled packages from $VERDIR"
+          else
+            echo "No pre-compiled packages for ${{ matrix.version }}/$ARCH"
+          fi
+
+      # ------------------------------------------------------------------
+      # Assemble final image – copy all compiled + pre‑compiled packages and build index
+      # ------------------------------------------------------------------
+      - name: Copy all packages into ImageBuilder and generate index
+        run: |
+          # Freshly compiled packages
+          cp collected-packages/* imagebuilder/packages/ 2>/dev/null || true
+          # Pre‑compiled packages are already in imagebuilder/packages/ from previous step
           make -C imagebuilder package_index V=s
 
       - name: Copy device-specific overlay
@@ -172,7 +204,6 @@ jobs:
             echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
             echo "Using package list from $PKGFILE"
           else
-            # Fallback: always include luci, plus any custom packages you built
             CUSTOM="${{ steps.pkgnames.outputs.names }}"
             echo "packages=luci $CUSTOM" >> $GITHUB_OUTPUT
             echo "Using fallback packages"
