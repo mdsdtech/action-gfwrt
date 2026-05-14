@@ -1,0 +1,186 @@
+name: Build ImmortalWrt for multiple devices (custom feed + version per device + select packages)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.device }} (${{ matrix.version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ------------------------------------------------------------------------
+          # ADJUST PROFILES AND PACKAGE LISTS TO YOUR ACTUAL SETUP
+          # ------------------------------------------------------------------------
+          # - device: BPI-R3-Mini
+          #   target: mediatek
+          #   subtarget: filogic
+          #   profile: bananapi_bpi-r3-mini
+          #   version: 24.10.6
+          #   gcc_version: 13.3.0
+          #   release:
+          #   custom_pkgs: "luci-app-modeminfo modemmanager" # packages from your feed to compile
+          # - device: BPI-R4
+          #   target: mediatek
+          #   subtarget: filogic
+          #   profile: bananapi_bpi-r4
+          #   version: 24.10.6
+          #   gcc_version: 13.3.0
+          #   custom_pkgs: "modemmanager"
+          - device: XiGuaPi-V3
+            target: rockchip
+            subtarget: armv8
+            profile: nlnet_xiguapi-v3
+            version: 24.10.6
+            gcc_version: 13.3.0
+            custom_pkgs: "" # no custom packages needed
+          # - device: MangoPi-M28C
+          #   target: rockchip
+          #   subtarget: armv8
+          #   profile: widora_mangopi-m28c
+          #   version: 25.12
+          #   gcc_version: 13.3.0
+          #   custom_pkgs: "luci-app-modeminfo modemmanager"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential ccache file gawk gettext git \
+            libncurses5-dev libssl-dev python3 python3-distutils rsync unzip wget zlib1g-dev
+
+      # ------------------------------------------------------------------
+      # Cache & download SDK (per target, subtarget AND version)
+      # ------------------------------------------------------------------
+      - name: Cache SDK
+        id: cache-sdk
+        uses: actions/cache@v4
+        with:
+          path: sdk
+          key: sdk-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}-v2
+
+      - name: Download SDK
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p sdk && cd sdk
+          URL="https://downloads.immortalwrt.org/releases/${{ matrix.version }}/targets/${{ matrix.target }}/${{ matrix.subtarget }}/immortalwrt-sdk-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+          wget -qO- "$URL" | tar xJ --strip-components=1
+
+      # ------------------------------------------------------------------
+      # Cache & download ImageBuilder
+      # ------------------------------------------------------------------
+      - name: Cache ImageBuilder
+        id: cache-ib
+        uses: actions/cache@v4
+        with:
+          path: imagebuilder
+          key: ib-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}-v2
+
+      - name: Download ImageBuilder
+        if: steps.cache-ib.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p imagebuilder && cd imagebuilder
+          URL="https://downloads.immortalwrt.org/releases/${{ matrix.version }}/targets/${{ matrix.target }}/${{ matrix.subtarget }}/immortalwrt-imagebuilder-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}.Linux-x86_64.tar.xz"
+          wget -qO- "$URL" | tar xJ --strip-components=1
+
+      # ------------------------------------------------------------------
+      # Add your custom feed
+      # ------------------------------------------------------------------
+      - name: Add custom feed to SDK
+        working-directory: sdk
+        run: |
+          echo "src-git custom https://github.com/mdsdtech/modem_feeds;custom" >> feeds.conf.default
+
+      - name: Update and install feeds
+        working-directory: sdk
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      # ------------------------------------------------------------------
+      # ★ ONLY COMPILE THE PACKAGES YOU SPECIFIED ★
+      # ------------------------------------------------------------------
+      - name: Set package names to compile
+        id: pkgnames
+        run: |
+          # Directly use the matrix variable; it may be empty
+          echo "names=${{ matrix.custom_pkgs }}" >> $GITHUB_OUTPUT
+
+      - name: Build custom packages (if any)
+        if: steps.pkgnames.outputs.names != ''
+        working-directory: sdk
+        run: |
+          for pkg in ${{ steps.pkgnames.outputs.names }}; do
+            echo "::group::Building $pkg"
+            make package/${pkg}/compile V=s -j$(nproc) || exit 1
+            echo "::endgroup::"
+          done
+
+      - name: Collect compiled .ipk files
+        if: steps.pkgnames.outputs.names != ''
+        run: |
+          mkdir -p collected-packages
+          for pkg in ${{ steps.pkgnames.outputs.names }}; do
+            find sdk/bin/packages/ -name "${pkg}_*.ipk" -exec cp {} collected-packages/ \;
+          done
+
+      # ------------------------------------------------------------------
+      # Assemble final image
+      # ------------------------------------------------------------------
+      - name: Copy .ipk files into ImageBuilder
+        if: steps.pkgnames.outputs.names != ''
+        run: |
+          cp collected-packages/*.ipk imagebuilder/packages/ 2>/dev/null || true
+          make -C imagebuilder package_index V=s
+
+      - name: Copy device-specific overlay
+        run: |
+          DEVICE_DIR="files/${{ matrix.device }}"
+          if [ -d "$DEVICE_DIR" ]; then
+            rm -rf imagebuilder/files
+            cp -r "$DEVICE_DIR" imagebuilder/files
+            echo "Applied overlay from $DEVICE_DIR"
+          else
+            echo "No overlay found for ${{ matrix.device }}"
+          fi
+
+      - name: Read package list for this device
+        id: pkglist
+        run: |
+          PKGFILE="configs/${{ matrix.device }}.packages"
+          if [ -f "$PKGFILE" ]; then
+            PACKAGES=$(grep -v '^#' "$PKGFILE" | tr '\n' ' ')
+            echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
+            echo "Using package list from $PKGFILE"
+          else
+            # Fallback: always include luci, plus any custom packages you built
+            CUSTOM="${{ steps.pkgnames.outputs.names }}"
+            echo "packages=luci $CUSTOM" >> $GITHUB_OUTPUT
+            echo "Using fallback packages"
+          fi
+
+      - name: Build firmware image
+        working-directory: imagebuilder
+        run: |
+          make image \
+            PROFILE="${{ matrix.profile }}" \
+            PACKAGES="${{ steps.pkglist.outputs.packages }}" \
+            FILES=files/ \
+            ROOTFS_PARTSIZE=900 \
+            V=s -j$(nproc)
+
+      # ------------------------------------------------------------------
+      # Upload artifact
+      # ------------------------------------------------------------------
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gfriendwrt-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}-${{ matrix.profile }}
+          path: imagebuilder/bin/targets/**/*
