@@ -37,7 +37,7 @@ jobs:
             profile: nlnet_xiguapi-v3
             version: 24.10.6
             gcc_version: 13.3.0
-            custom_pkgs: "" # no custom packages needed
+            custom_pkgs: "luci-app-hypermodem luci-app-modeminfo-quectel luci-app-qmodem-next luci-app-qmodem-ttlfw4 luci-app-qmodem-monitor" # no custom packages needed
           # - device: MangoPi-M28C
           #   target: rockchip
           #   subtarget: armv8
@@ -107,6 +107,18 @@ jobs:
       # ------------------------------------------------------------------
       # ★ ONLY COMPILE THE PACKAGES YOU SPECIFIED ★
       # ------------------------------------------------------------------
+      - name: Apply custom package compile-time options
+        working-directory: sdk
+        run: |
+          OPTS_FILE="../configs/${{ matrix.device }}.custom_opts"
+          if [ -f "$OPTS_FILE" ]; then
+            echo "Applying custom options from $OPTS_FILE"
+            cat "$OPTS_FILE" >> .config
+            make defconfig
+          else
+            echo "No custom options file found, using package defaults"
+          fi
+
       - name: Set package names to compile
         id: pkgnames
         run: |
