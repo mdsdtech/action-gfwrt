@@ -71,7 +71,7 @@ jobs:
         if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
           mkdir -p sdk && cd sdk
-          URL="https://downloads.immortalwrt.org/releases/${{ matrix.version }}/targets/${{ matrix.target }}/${{ matrix.subtarget }}/immortalwrt-sdk-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}_${{ matrix.gcc_version }}_musl.Linux-x86_64.tar.zst"
+          URL="https://downloads.immortalwrt.org/releases/${{ matrix.version }}/targets/${{ matrix.target }}/${{ matrix.subtarget }}/immortalwrt-sdk-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}_gcc-${{ matrix.gcc_version }}_musl.Linux-x86_64.tar.zst"
           wget -qO- "$URL" | tar --zstd -x --strip-components=1   # fixed: use --zstd
 
       # ------------------------------------------------------------------
