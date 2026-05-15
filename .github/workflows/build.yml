@@ -37,7 +37,7 @@ jobs:
             profile: nlnet_xiguapi-v3
             version: 24.10.6
             gcc_version: 13.3.0
-            custom_pkgs: "luci-app-hypermodem luci-app-modeminfo-quectel luci-app-qmodem-next luci-app-qmodem-ttlfw4 luci-app-qmodem-monitor"
+            custom_pkgs: "kmod-fb-tft-gc9307"
           # - device: MangoPi-M28C
           #   target: rockchip
           #   subtarget: armv8
@@ -98,10 +98,7 @@ jobs:
         working-directory: sdk
         run: |
           echo "src-git custom https://github.com/mdsdtech/modem_feeds;custom" >> feeds.conf.default
-          echo "src-git openwrt-bandix https://github.com/timsaya/openwrt-bandix;main" >> feeds.conf.default
-          echo "src-git luci-bandix https://github.com/timsaya/luci-app-bandix;main" >> feeds.conf.default
-          # Directly clone a package (simplified clone)
-          git clone --depth 1 --branch master https://github.com/muink/luci-app-tinyfilemanager.git package/luci-app-tinyfilemanager
+          echo "src-git tftgc9307 https://github.com/mdsdtech/kmod-fb-tft-gc9307;custom" >> feeds.conf.default
 
       - name: Update and install feeds
         working-directory: sdk
