@@ -98,7 +98,7 @@ jobs:
         working-directory: sdk
         run: |
           echo "src-git custom https://github.com/mdsdtech/modem_feeds;custom" >> feeds.conf.default
-          echo "src-git tftgc9307 https://github.com/mdsdtech/kmod-fb-tft-gc9307;custom" >> feeds.conf.default
+          git clone --depth 1 --branch custom https://github.com/mdsdtech/kmod-fb-tft-gc9307.git package/kmod-fb-tft-gc9307
 
       - name: Update and install feeds
         working-directory: sdk
