@@ -1,0 +1,8 @@
+# Put your custom commands here that should be executed once
+# the system init finished. By default this file does nothing.
+
+if lspci -d 14c3:7961 | grep -q 14c3:7961; then
+    logger -t wifi-fix "MT7921 found, starting Wi-Fi..."
+    wifi # or replace with your actual command (e.g., /sbin/wifi)
+fi
+exit 0
