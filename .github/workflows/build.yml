@@ -54,8 +54,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential ccache file gawk gettext git \
-            libncurses5-dev libssl-dev python3 python3-distutils rsync unzip wget \
-            zlib1g-dev zstd          # zstd added to handle .tar.zst archives
+            libncurses5-dev libssl-dev python3 rsync unzip wget \
+            zlib1g-dev zstd
 
       # ------------------------------------------------------------------
       # Cache & download SDK (per target, subtarget AND version)
