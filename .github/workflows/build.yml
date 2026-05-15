@@ -54,7 +54,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential ccache file gawk gettext git \
-            libncurses5-dev libssl-dev python3 python3-distutils rsync unzip wget zlib1g-dev
+            libncurses5-dev libssl-dev python3 python3-distutils rsync unzip wget \
+            zlib1g-dev zstd          # zstd added to handle .tar.zst archives
 
       # ------------------------------------------------------------------
       # Cache & download SDK (per target, subtarget AND version)
@@ -70,9 +71,8 @@ jobs:
         if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
           mkdir -p sdk && cd sdk
-          # Note: For 25.12 the archive name or format might differ – adjust if necessary.
           URL="https://downloads.immortalwrt.org/releases/${{ matrix.version }}/targets/${{ matrix.target }}/${{ matrix.subtarget }}/immortalwrt-sdk-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}_${{ matrix.gcc_version }}_musl.Linux-x86_64.tar.zst"
-          wget -qO- "$URL" | tar xJ --strip-components=1
+          wget -qO- "$URL" | tar --zstd -x --strip-components=1   # fixed: use --zstd
 
       # ------------------------------------------------------------------
       # Cache & download ImageBuilder
@@ -89,7 +89,7 @@ jobs:
         run: |
           mkdir -p imagebuilder && cd imagebuilder
           URL="https://downloads.immortalwrt.org/releases/${{ matrix.version }}/targets/${{ matrix.target }}/${{ matrix.subtarget }}/immortalwrt-imagebuilder-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}.Linux-x86_64.tar.zst"
-          wget -qO- "$URL" | tar xJ --strip-components=1
+          wget -qO- "$URL" | tar --zstd -x --strip-components=1   # fixed: use --zstd
 
       # ------------------------------------------------------------------
       # Add your custom feeds and directly cloned packages
@@ -100,12 +100,8 @@ jobs:
           echo "src-git custom https://github.com/mdsdtech/modem_feeds;custom" >> feeds.conf.default
           echo "src-git openwrt-bandix https://github.com/timsaya/openwrt-bandix;main" >> feeds.conf.default
           echo "src-git luci-bandix https://github.com/timsaya/luci-app-bandix;main" >> feeds.conf.default
-          # Directly clone a package (if you later switch to pre‑compiled, you can remove this)
-          git clone --depth 1 --branch master --single-branch --no-checkout https://github.com/muink/luci-app-tinyfilemanager.git package/luci-app-tinyfilemanager
-          pushd package/luci-app-tinyfilemanager
-          umask 022
-          git checkout
-          popd
+          # Directly clone a package (simplified clone)
+          git clone --depth 1 --branch master https://github.com/muink/luci-app-tinyfilemanager.git package/luci-app-tinyfilemanager
 
       - name: Update and install feeds
         working-directory: sdk
@@ -114,7 +110,7 @@ jobs:
           ./scripts/feeds install -a
 
       # ------------------------------------------------------------------
-      # Build only the packages you specified in the matrix
+      # Apply compile‑time choices from configs/<device>.custom_opts
       # ------------------------------------------------------------------
       - name: Apply custom package compile-time options
         working-directory: sdk
@@ -128,6 +124,9 @@ jobs:
             echo "No custom options file found, using package defaults"
           fi
 
+      # ------------------------------------------------------------------
+      # Build only the packages you specified in the matrix
+      # ------------------------------------------------------------------
       - name: Set package names to compile
         id: pkgnames
         run: |
@@ -143,25 +142,29 @@ jobs:
             echo "::endgroup::"
           done
 
-      # ★ FIXED: Collect compiled packages – now works with both .ipk and .apk
-      - name: Collect compiled packages
+      # Ensure the collected-packages directory always exists
+      - name: Prepare collected-packages directory
+        run: mkdir -p collected-packages
+
+      - name: Collect compiled packages (.ipk / .apk)
         if: steps.pkgnames.outputs.names != ''
         run: |
+          # Remove any stale files (optional, but safe)
           rm -rf collected-packages && mkdir -p collected-packages
           for pkg in ${{ steps.pkgnames.outputs.names }}; do
             find sdk/bin/packages/ -name "${pkg}_*" \( -name "*.ipk" -o -name "*.apk" \) \
               -exec cp {} collected-packages/ \;
           done
 
-      # Determine target architecture from the SDK
+      # Determine target architecture from the SDK safely
       - name: Determine package architecture from SDK
         id: arch
         working-directory: sdk
         run: |
-          ARCH=$(ls bin/packages/ | head -1)
+          ARCH=$(ls bin/packages/ 2>/dev/null | head -1) || ARCH=""
           echo "arch=$ARCH" >> $GITHUB_OUTPUT
 
-      # Add pre‑compiled packages for the current version & architecture (e.g., precompiled/24.10.6/aarch64_cortex-a76/)
+      # Add pre‑compiled packages for the current version & architecture
       - name: Add pre-compiled packages for this version and architecture
         if: steps.arch.outputs.arch != ''
         run: |
@@ -179,9 +182,7 @@ jobs:
       # ------------------------------------------------------------------
       - name: Copy all packages into ImageBuilder and generate index
         run: |
-          # Freshly compiled packages
           cp collected-packages/* imagebuilder/packages/ 2>/dev/null || true
-          # Pre‑compiled packages are already in imagebuilder/packages/ from previous step
           make -C imagebuilder package_index V=s
 
       - name: Copy device-specific overlay
