@@ -37,7 +37,7 @@ jobs:
             profile: nlnet_xiguapi-v3
             version: 24.10.6
             gcc_version: 13.3.0
-            custom_pkgs: "kmod-fb-tft-gc9307"
+            custom_pkgs: "kmod-fb-tft-gc9307 kmod-qmi_wwan_s kmod-qmi_wwan_q kmod-qmi_wwan_f kmod-mtk-t7xx kmod-pcie_mhi quectel-CM-5G-M quectel-CM-5G"
           # - device: MangoPi-M28C
           #   target: rockchip
           #   subtarget: armv8
@@ -54,7 +54,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential ccache file gawk gettext git \
-            libncurses5-dev libssl-dev python3 rsync unzip wget \
+            libncurses5-dev libssl-dev python3 python3-pyelftools rsync unzip wget \
             zlib1g-dev zstd
 
       # ------------------------------------------------------------------
