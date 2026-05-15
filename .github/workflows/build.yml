@@ -179,7 +179,10 @@ jobs:
       # ------------------------------------------------------------------
       - name: Copy all packages into ImageBuilder and generate index
         run: |
-          cp collected-packages/* imagebuilder/packages/ 2>/dev/null || true
+          # Only copy .ipk files – .apk is not supported in 24.10.6
+          cp collected-packages/*.ipk imagebuilder/packages/ 2>/dev/null || true
+          # Remove the Makefile redirection so errors become visible
+          sed -i 's| >/dev/null 2>/dev/null||' imagebuilder/Makefile
           make -C imagebuilder package_index V=s
 
       - name: Copy device-specific overlay
