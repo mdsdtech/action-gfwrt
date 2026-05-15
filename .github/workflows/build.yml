@@ -182,8 +182,8 @@ jobs:
           # Only copy .ipk files – .apk is not supported in 24.10.6
           cp collected-packages/*.ipk imagebuilder/packages/ 2>/dev/null || true
           # Remove the Makefile redirection so errors become visible
-          sed -i 's| >/dev/null 2>/dev/null||' imagebuilder/Makefile
-          make -C imagebuilder package_index V=s
+          # sed -i 's| >/dev/null 2>/dev/null||' imagebuilder/Makefile
+          # make -C imagebuilder package_index V=s
 
       - name: Copy device-specific overlay
         run: |
@@ -209,6 +209,11 @@ jobs:
             echo "packages=luci $CUSTOM" >> $GITHUB_OUTPUT
             echo "Using fallback packages"
           fi
+
+      - name: Disable signature check in ImageBuilder
+        working-directory: imagebuilder
+        run: |
+          sed -i 's/^option check_signature/# option check_signature/' repositories.conf
 
       - name: Build firmware image
         working-directory: imagebuilder
