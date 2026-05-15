@@ -37,7 +37,7 @@ jobs:
             profile: nlnet_xiguapi-v3
             version: 24.10.6
             gcc_version: 13.3.0
-            custom_pkgs: "kmod-fb-tft-gc9307 xgp-v3-screen luci-app-qmodem-next luci-app-qmodem-ttlfw4 luci-app-qmodem-monitor luci-app-qmodem-sms kmod-qmi_wwan_s kmod-qmi_wwan_q kmod-qmi_wwan_f kmod-mtk-t7xx kmod-pcie_mhi quectel-CM-5G-M quectel-CM-5G"
+            custom_pkgs: "fb-tft-gc9307 xgp-v3-screen luci-app-qmodem-next luci-app-qmodem-ttlfw4 luci-app-qmodem-monitor luci-app-qmodem-sms qmi_wwan_s qmi_wwan_q qmi_wwan_f mtk-t7xx pcie_mhi quectel-CM-5G-M quectel-CM-5G"
           # - device: MangoPi-M28C
           #   target: rockchip
           #   subtarget: armv8
