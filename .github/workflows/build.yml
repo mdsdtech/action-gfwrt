@@ -1,8 +1,10 @@
-name: Build ImmortalWrt for multiple devices (custom feed + version per device + select packages)
+name: Build GFriendWRT for multiple devices (custom feed + version per device + select packages)
 
 on:
   push:
     branches: [main]
+    tags:
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -16,14 +18,14 @@ jobs:
           # ------------------------------------------------------------------------
           # ADJUST PROFILES AND PACKAGE LISTS TO YOUR ACTUAL SETUP
           # ------------------------------------------------------------------------
-          # - device: BPI-R3-Mini
-          #   target: mediatek
-          #   subtarget: filogic
-          #   profile: bananapi_bpi-r3-mini
-          #   version: 24.10.6
-          #   gcc_version: 13.3.0
-          #   release:
-          #   custom_pkgs: "luci-app-modeminfo modemmanager"
+          - device: BPI-R3-Mini
+            target: mediatek
+            subtarget: filogic
+            profile: bananapi_bpi-r3-mini
+            version: 24.10.6
+            gcc_version: 13.3.0
+            release:
+            custom_pkgs: "luci-app-qmodem-next luci-app-qmodem-ttlfw4 luci-app-qmodem-monitor luci-app-qmodem-sms simcom_QMI_WWAN quectel_QMI_WWAN fibocom_QMI_WWAN quectel_CM_5G_M quectel_cm_5G"
           # - device: BPI-R4
           #   target: mediatek
           #   subtarget: filogic
@@ -37,7 +39,7 @@ jobs:
             profile: nlnet_xiguapi-v3
             version: 24.10.6
             gcc_version: 13.3.0
-            custom_pkgs: "kmod-fb-tft-gc9307 xgp-v3-screen luci-app-qmodem-next luci-app-qmodem-ttlfw4 luci-app-qmodem-monitor luci-app-qmodem-sms simcom_QMI_WWAN quectel_QMI_WWAN fibocom_QMI_WWAN quectel_MHI quectel_CM_5G_M quectel_cm_5G"
+            custom_pkgs: "luci-app-qmodem-next luci-app-qmodem-ttlfw4 luci-app-qmodem-monitor luci-app-qmodem-sms simcom_QMI_WWAN quectel_QMI_WWAN fibocom_QMI_WWAN quectel_MHI quectel_CM_5G_M quectel_cm_5G kmod-fb-tft-gc9307 xgp-v3-screen"
           # - device: MangoPi-M28C
           #   target: rockchip
           #   subtarget: armv8
@@ -97,14 +99,28 @@ jobs:
       - name: Add custom feed to SDK
         working-directory: sdk
         run: |
-          echo "src-git custom https://github.com/mdsdtech/modem_feeds;custom" >> feeds.conf.default
-          git clone --depth 1 --branch custom https://github.com/mdsdtech/kmod-fb-tft-gc9307.git package/kmod-fb-tft-gc9307
-          git clone --depth 1 --branch custom https://github.com/mdsdtech/xgp-v3-screen.git package/xgp-v3-screen
+          # Avoid appending duplicate feed lines
+          if ! grep -q "src-git custom https://github.com/mdsdtech/modem_feeds;custom" feeds.conf.default; then
+            echo "src-git custom https://github.com/mdsdtech/modem_feeds;custom" >> feeds.conf.default
+          fi
 
-      - name: Update and install feeds
+      - name: Update feeds
         working-directory: sdk
         run: |
           ./scripts/feeds update -a
+
+      - name: Initialize feed submodules (after update)
+        working-directory: sdk
+        run: |
+          if [ -d feeds/custom ]; then
+            cd feeds/custom
+            git submodule update --init --recursive --depth 1
+            cd ../..
+          fi
+
+      - name: Install feeds
+        working-directory: sdk
+        run: |
           ./scripts/feeds install -a
 
       # ------------------------------------------------------------------
@@ -222,7 +238,7 @@ jobs:
             PROFILE="${{ matrix.profile }}" \
             PACKAGES="${{ steps.pkglist.outputs.packages }}" \
             FILES=files/ \
-            ROOTFS_PARTSIZE=900 \
+            ROOTFS_PARTSIZE=1024 \
             V=s -j$(nproc)
 
       # ------------------------------------------------------------------
@@ -233,3 +249,63 @@ jobs:
         with:
           name: gfriendwrt-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}-${{ matrix.profile }}
           path: imagebuilder/bin/targets/**/*
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/') && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate release description
+        id: desc
+        run: |
+          echo "### Devices in this release" > body.md
+          echo "" >> body.md
+          echo "| Device | Version | Target | Profile |" >> body.md
+          echo "|--------|---------|--------|---------|" >> body.md
+
+          # Loop over downloaded artifact directories
+          for dir in artifacts/gfriendwrt-*; do
+            [ -d "$dir" ] || continue
+            # Artifact name format: gfriendwrt-<version>-<target>-<subtarget>-<profile>
+            name=$(basename "$dir")
+            # Remove prefix "gfriendwrt-"
+            rest=${name#gfriendwrt-}
+            # Split the rest by '-' into version, target, subtarget, profile
+            version=$(echo "$rest" | cut -d'-' -f1)
+            target=$(echo "$rest" | cut -d'-' -f2)
+            subtarget=$(echo "$rest" | cut -d'-' -f3)
+            profile=$(echo "$rest" | cut -d'-' -f4-)
+
+            # Find the actual firmware file(s) inside
+            fw_files=$(find "$dir" -type f \( -name "*.img.gz" -o -name "*.img" -o -name "*.bin" \) | head -1)
+            if [ -n "$fw_files" ]; then
+              fw_name=$(basename "$fw_files")
+              # Link to the uploaded artifact (GitHub will provide download links)
+              echo "| ${target}-${profile} | ${version} | ${target}/${subtarget} | ${profile} |" >> body.md
+            else
+              echo "| ${target}-${profile} | ${version} | ${target}/${subtarget} | ${profile} (no image found) |" >> body.md
+            fi
+          done
+
+          echo "" >> body.md
+          echo "Build commit: ${{ github.sha }}" >> body.md
+          cat body.md
+          # Save body for the release step
+          cat body.md >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "GFriendWRT ${{ github.ref_name }}"
+          body_path: body.md
+          files: artifacts/**
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
