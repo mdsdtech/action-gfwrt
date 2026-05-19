@@ -1,0 +1,52 @@
+#!/bin/sh
+
+# --- System Configuration ---
+# Set hostname
+uci set system.@system[0].hostname='GFriendWRT'
+
+# Set timezone and zonename
+uci set system.@system[0].timezone='<+08>-8'
+uci set system.@system[0].zonename='Asia/Singapore'
+uci commit system
+
+# --- System Security ---
+# Set root password to 'root'
+echo -e "root\nroot" | passwd root
+
+# --- Luci Configuration ---
+# Set Luci theme to Argon (Ensure the theme is installed first)
+uci set luci.main.mediaurlbase='/luci-static/argon'
+uci commit luci
+
+# --- Wireless Configuration ---
+
+# 1. Configure 2.4GHz (radio0)
+uci set wireless.radio0.country='CH'
+uci set wireless.radio0.channel='13'
+uci set wireless.radio0.htmode='HE40'
+uci set wireless.radio0.txpower='auto'
+uci set wireless.radio0.disabled='0'
+
+# Configure 2.4GHz Interface
+uci set wireless.default_radio0.ssid='GFriendWRT'
+uci set wireless.default_radio0.encryption='sae-mixed'
+uci set wireless.default_radio0.key='gfwrt@123'
+
+# 2. Configure 5GHz (radio1)
+uci set wireless.radio1.country='CH'
+uci set wireless.radio1.channel='100'
+uci set wireless.radio1.htmode='HE160'
+uci set wireless.radio1.mu_beamformer='1'
+uci set wireless.radio1.txpower='30'
+uci set wireless.radio1.disabled='0'
+
+# Configure 5GHz Interface
+uci set wireless.default_radio1.ssid='GFriendWRT5'
+uci set wireless.default_radio1.encryption='sae-mixed'
+uci set wireless.default_radio1.key='gfwrt@123'
+
+# Commit wireless changes
+uci commit wireless
+
+# No reload commands needed for uci-defaults
+exit 0
