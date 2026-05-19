@@ -295,6 +295,11 @@ jobs:
 
           echo "" >> body.md
           echo "Build commit: ${{ github.sha }}" >> body.md
+          echo "Build date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> body.md
+          echo "" >> body.md
+          echo "Login credentials: root / root" >> body.md
+          echo "" >> body.md
+          echo "WiFi: SSID 'GFWRT' with password 'gfwrt@123'" >> body.md
           cat body.md
           # Save body for the release step
           cat body.md >> $GITHUB_OUTPUT
