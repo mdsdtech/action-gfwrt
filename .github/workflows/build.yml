@@ -18,15 +18,15 @@ jobs:
           # ------------------------------------------------------------------------
           # ADJUST PROFILES AND PACKAGE LISTS TO YOUR ACTUAL SETUP
           # ------------------------------------------------------------------------
-          # - device: BPI-R3-Mini
-          #   target: mediatek
-          #   subtarget: filogic
-          #   profile: bananapi_bpi-r3-mini
-          #   version: 24.10.6
-          #   gcc_version: 13.3.0
-          #   release:
-          #   custom_pkgs: "luci-app-qmodem-next luci-app-qmodem-ttlfw4 luci-app-qmodem-monitor luci-app-qmodem-sms simcom_QMI_WWAN quectel_QMI_WWAN fibocom_QMI_WWAN quectel_CM_5G_M quectel_cm_5G"
-          # - device: BPI-R4
+          - device: BPI-R3-Mini
+            target: mediatek
+            subtarget: filogic
+            profile: bananapi_bpi-r3-mini
+            version: 24.10.6
+            gcc_version: 13.3.0
+            release:
+            custom_pkgs: "luci-app-qmodem-next luci-app-qmodem-ttlfw4 luci-app-qmodem-monitor luci-app-qmodem-sms simcom_QMI_WWAN quectel_QMI_WWAN fibocom_QMI_WWAN quectel_CM_5G_M quectel_cm_5G"
+          #- device: BPI-R4
           #   target: mediatek
           #   subtarget: filogic
           #   profile: bananapi_bpi-r4
