@@ -301,8 +301,6 @@ jobs:
           echo "" >> body.md
           echo "WiFi: SSID 'GFWRT' with password 'gfwrt@123'" >> body.md
           cat body.md
-          # Save body for the release step
-          cat body.md >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
