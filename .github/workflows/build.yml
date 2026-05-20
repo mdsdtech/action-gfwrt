@@ -122,6 +122,7 @@ jobs:
       - name: Install feeds
         working-directory: sdk
         run: |
+          ./scripts/feeds update -a
           ./scripts/feeds install -a
 
       # ------------------------------------------------------------------
