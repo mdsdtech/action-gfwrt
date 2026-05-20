@@ -242,6 +242,16 @@ jobs:
             ROOTFS_PARTSIZE=1024 \
             V=s -j$(nproc)
 
+      - name: Rename firmware files to gfriendwrt prefix
+        working-directory: imagebuilder
+        run: |
+          find bin/targets/ -name 'immortalwrt-*' -print0 | while IFS= read -r -d '' f; do
+            dir=$(dirname "$f")
+            base=$(basename "$f")
+            newname="gfriendwrt-${base#immortalwrt-}"
+            mv -v "$f" "$dir/$newname"
+          done
+
       # ------------------------------------------------------------------
       # Upload artifact
       # ------------------------------------------------------------------
