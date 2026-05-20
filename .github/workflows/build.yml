@@ -103,25 +103,20 @@ jobs:
           if ! grep -q "src-git custom https://github.com/mdsdtech/modem_feeds;custom" feeds.conf.default; then
             echo "src-git custom https://github.com/mdsdtech/modem_feeds;custom" >> feeds.conf.default
           fi
+          # Remove any pre‑existing cloned directories (from cache) to allow fresh clone
+          rm -rf package/kmod-fb-tft-gc9307 package/xgp-v3-screen package/luci-app-arwi-dashboard package/luci-app-cpu-status package/luci-app-poweroff
+
+          # Clone the packages (always succeeds, even if cache restored)
+          git clone --depth 1 --branch custom https://github.com/mdsdtech/kmod-fb-tft-gc9307.git package/kmod-fb-tft-gc9307
+          git clone --depth 1 --branch custom https://github.com/mdsdtech/xgp-v3-screen.git package/xgp-v3-screen
+          # git clone --depth 1 --branch custom https://github.com/mdsdtech/luci-app-arwi-dashboard.git package/luci-app-arwi-dashboard
+          # git clone --depth 1 --branch custom https://github.com/mdsdtech/luci-app-cpu-status.git package/luci-app-cpu-status
+          # git clone --depth 1 --branch custom https://github.com/mdsdtech/luci-app-poweroff.git package/luci-app-poweroff
 
       - name: Update feeds
         working-directory: sdk
         run: |
           rm -rf feeds
-          ./scripts/feeds update -a
-
-      - name: Initialize feed submodules (after update)
-        working-directory: sdk
-        run: |
-          if [ -d feeds/custom ]; then
-            cd feeds/custom
-            git submodule update --init --recursive --depth 1
-            cd ../..
-          fi
-
-      - name: Update feeds again (to re-index with submodules)
-        working-directory: sdk
-        run: |
           ./scripts/feeds update -a
 
       - name: Install feeds
