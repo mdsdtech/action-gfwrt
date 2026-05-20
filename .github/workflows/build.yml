@@ -119,10 +119,14 @@ jobs:
             cd ../..
           fi
 
-      - name: Install feeds
+      - name: Update feeds again (to re-index with submodules)
         working-directory: sdk
         run: |
           ./scripts/feeds update -a
+
+      - name: Install feeds
+        working-directory: sdk
+        run: |
           ./scripts/feeds install -a
 
       # ------------------------------------------------------------------
