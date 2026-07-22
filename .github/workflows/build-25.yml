@@ -1,0 +1,307 @@
+name: Build GFriendWRT 25.12.1 for multiple devices (custom feed + version per device + select packages)
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.device }} (${{ matrix.version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ------------------------------------------------------------------------
+          # ADJUST PROFILES AND PACKAGE LISTS TO YOUR ACTUAL SETUP
+          # ------------------------------------------------------------------------
+          - device: BPI-R3-Mini
+            target: mediatek
+            subtarget: filogic
+            profile: bananapi_bpi-r3-mini
+            version: 25.12.1
+            gcc_version: 14.3.0
+            release:
+            custom_pkgs: "luci-app-qmodem-next luci-app-qmodem-ttlfw4 luci-app-qmodem-monitor luci-app-qmodem-sms simcom_QMI_WWAN quectel_QMI_WWAN fibocom_QMI_WWAN quectel_CM_5G_M quectel_cm_5G luci-app-arwi-dashboard luci-app-atcommands luci-app-cpu-status luci-app-modeminfo-quectel luci-app-poweroff luci-theme-higowrt"
+          - device: XiGuaPi-V3
+            target: rockchip
+            subtarget: armv8
+            profile: nlnet_xiguapi-v3
+            version: 25.12.1
+            gcc_version: 14.3.0
+            custom_pkgs: "luci-app-qmodem-next luci-app-qmodem-ttlfw4 luci-app-qmodem-monitor luci-app-qmodem-sms simcom_QMI_WWAN quectel_QMI_WWAN fibocom_QMI_WWAN quectel_MHI quectel_CM_5G_M quectel_cm_5G kmod-fb-tft-gc9307 xgp-v3-screen luci-app-arwi-dashboard luci-app-atcommands luci-app-cpu-status luci-app-modeminfo-quectel luci-app-poweroff luci-theme-higowrt"
+          - device: MangoPi-M28C
+            target: rockchip
+            subtarget: armv8
+            profile: widora_mangopi-m28c
+            version: 25.12.1
+            gcc_version: 14.3.0
+            custom_pkgs: "luci-app-qmodem-next luci-app-qmodem-ttlfw4 luci-app-qmodem-monitor luci-app-qmodem-sms simcom_QMI_WWAN quectel_QMI_WWAN fibocom_QMI_WWAN quectel_CM_5G_M quectel_cm_5G luci-app-arwi-dashboard luci-app-atcommands luci-app-cpu-status luci-app-modeminfo-quectel luci-app-poweroff luci-theme-higowrt"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential ccache file gawk gettext git \
+            libncurses5-dev libssl-dev python3 python3-pyelftools rsync unzip wget \
+            zlib1g-dev zstd
+
+      # ------------------------------------------------------------------
+      # Cache & download SDK (per target, subtarget AND version)
+      # ------------------------------------------------------------------
+      - name: Cache SDK
+        id: cache-sdk
+        uses: actions/cache@v4
+        with:
+          path: sdk
+          key: sdk-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}-v2
+
+      - name: Download SDK
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p sdk && cd sdk
+          URL="https://downloads.immortalwrt.org/releases/${{ matrix.version }}/targets/${{ matrix.target }}/${{ matrix.subtarget }}/immortalwrt-sdk-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}_gcc-${{ matrix.gcc_version }}_musl.Linux-x86_64.tar.zst"
+          wget -qO- "$URL" | tar --zstd -x --strip-components=1   # fixed: use --zstd
+
+      # ------------------------------------------------------------------
+      # Cache & download ImageBuilder
+      # ------------------------------------------------------------------
+      - name: Cache ImageBuilder
+        id: cache-ib
+        uses: actions/cache@v4
+        with:
+          path: imagebuilder
+          key: ib-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}-v2
+
+      - name: Download ImageBuilder
+        if: steps.cache-ib.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p imagebuilder && cd imagebuilder
+          URL="https://downloads.immortalwrt.org/releases/${{ matrix.version }}/targets/${{ matrix.target }}/${{ matrix.subtarget }}/immortalwrt-imagebuilder-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}.Linux-x86_64.tar.zst"
+          wget -qO- "$URL" | tar --zstd -x --strip-components=1   # fixed: use --zstd
+
+      # ------------------------------------------------------------------
+      # Add your custom feeds and directly cloned packages
+      # ------------------------------------------------------------------
+      - name: Add custom feed to SDK
+        working-directory: sdk
+        run: |
+          # Avoid appending duplicate feed lines
+          if ! grep -q "src-git custom https://github.com/mdsdtech/modem_feeds;custom" feeds.conf.default; then
+            echo "src-git custom https://github.com/mdsdtech/modem_feeds;custom" >> feeds.conf.default
+          fi
+          # Remove any pre‑existing cloned directories (from cache) to allow fresh clone
+          rm -rf package/kmod-fb-tft-gc9307 package/xgp-v3-screen
+
+          # Clone the packages (always succeeds, even if cache restored)
+          git clone --depth 1 --branch custom https://github.com/mdsdtech/kmod-fb-tft-gc9307.git package/kmod-fb-tft-gc9307
+          git clone --depth 1 --branch custom https://github.com/mdsdtech/xgp-v3-screen.git package/xgp-v3-screen
+
+      - name: Update feeds
+        working-directory: sdk
+        run: |
+          rm -rf feeds
+          ./scripts/feeds update -a
+
+      - name: Install feeds
+        working-directory: sdk
+        run: |
+          ./scripts/feeds install -a
+
+      # ------------------------------------------------------------------
+      # Apply compile‑time choices from configs/<device>.custom_opts
+      # ------------------------------------------------------------------
+      - name: Apply custom package compile-time options
+        working-directory: sdk
+        run: |
+          OPTS_FILE="../configs/${{ matrix.device }}.custom_opts"
+          if [ -f "$OPTS_FILE" ]; then
+            echo "Applying custom options from $OPTS_FILE"
+            cat "$OPTS_FILE" >> .config
+            make defconfig
+          else
+            echo "No custom options file found, using package defaults"
+          fi
+
+      # ------------------------------------------------------------------
+      # Build only the packages you specified in the matrix
+      # ------------------------------------------------------------------
+      - name: Set package names to compile
+        id: pkgnames
+        run: |
+          echo "names=${{ matrix.custom_pkgs }}" >> $GITHUB_OUTPUT
+
+      - name: Build custom packages (if any)
+        if: steps.pkgnames.outputs.names != ''
+        working-directory: sdk
+        run: |
+          for pkg in ${{ steps.pkgnames.outputs.names }}; do
+            echo "::group::Building $pkg"
+            make package/${pkg}/compile V=s -j$(nproc) || exit 1
+            echo "::endgroup::"
+          done
+
+      # Ensure the collected-packages directory always exists
+      - name: Prepare collected-packages directory
+        run: mkdir -p collected-packages
+
+      - name: Collect ALL compiled packages (including kernel modules)
+        if: steps.pkgnames.outputs.names != ''
+        run: |
+          rm -rf collected-packages && mkdir -p collected-packages
+          # Regular user-space packages
+          find sdk/bin/packages/ -name '*.apk' -exec cp {} collected-packages/ \;
+          # Kernel modules and any target-specific packages
+          find sdk/bin/targets/ -name '*.apk' -exec cp {} collected-packages/ \;
+
+      # Determine target architecture from the SDK safely
+      - name: Determine package architecture from SDK
+        id: arch
+        working-directory: sdk
+        run: |
+          ARCH=$(ls bin/packages/ 2>/dev/null | head -1) || ARCH=""
+          echo "arch=$ARCH" >> $GITHUB_OUTPUT
+
+      # Add pre‑compiled packages for the current version & architecture
+      - name: Add pre-compiled packages for this version and architecture
+        if: steps.arch.outputs.arch != ''
+        run: |
+          ARCH="${{ steps.arch.outputs.arch }}"
+          VERDIR="precompiled/${{ matrix.version }}/$ARCH"
+          if [ -d "$VERDIR" ]; then
+            cp "$VERDIR"/* imagebuilder/packages/
+            echo "Added pre-compiled packages from $VERDIR"
+          else
+            echo "No pre-compiled packages for ${{ matrix.version }}/$ARCH"
+          fi
+
+      # ------------------------------------------------------------------
+      # Assemble final image – Copy all compiled
+      # ------------------------------------------------------------------
+      - name: Copy device-specific overlay
+        run: |
+          DEVICE_DIR="files/${{ matrix.device }}"
+          if [ -d "$DEVICE_DIR" ]; then
+            rm -rf imagebuilder/files
+            cp -r "$DEVICE_DIR" imagebuilder/files
+            echo "Applied overlay from $DEVICE_DIR"
+          else
+            echo "No overlay found for ${{ matrix.device }}"
+          fi
+
+      - name: Read package list for this device
+        id: pkglist
+        run: |
+          PKGFILE="configs/${{ matrix.device }}.packages"
+          if [ -f "$PKGFILE" ]; then
+            PACKAGES=$(grep -v '^#' "$PKGFILE" | tr '\n' ' ')
+            echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
+            echo "Using package list from $PKGFILE"
+          else
+            CUSTOM="${{ steps.pkgnames.outputs.names }}"
+            echo "packages=luci $CUSTOM" >> $GITHUB_OUTPUT
+            echo "Using fallback packages"
+          fi
+
+      - name: Disable signature check in ImageBuilder
+        working-directory: imagebuilder
+        run: |
+          sed -i 's/^option check_signature/# option check_signature/' repositories.conf
+
+      - name: Build firmware image
+        working-directory: imagebuilder
+        run: |
+          make image \
+            PROFILE="${{ matrix.profile }}" \
+            PACKAGES="${{ steps.pkglist.outputs.packages }}" \
+            FILES=files/ \
+            ROOTFS_PARTSIZE=1024 \
+            V=s -j$(nproc)
+
+      - name: Rename firmware files to gfriendwrt prefix
+        working-directory: imagebuilder
+        run: |
+          find bin/targets/ -name 'immortalwrt-*' -print0 | while IFS= read -r -d '' f; do
+            dir=$(dirname "$f")
+            base=$(basename "$f")
+            newname="gfriendwrt-${base#immortalwrt-}"
+            mv -v "$f" "$dir/$newname"
+          done
+
+      # ------------------------------------------------------------------
+      # Upload artifact
+      # ------------------------------------------------------------------
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gfriendwrt-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}-${{ matrix.profile }}
+          path: imagebuilder/bin/targets/**/*
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/') && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate release description
+        id: desc
+        run: |
+          echo "### Devices in this release" > body.md
+          echo "" >> body.md
+          echo "| Device | Version | Target | Profile |" >> body.md
+          echo "|--------|---------|--------|---------|" >> body.md
+
+          # Loop over downloaded artifact directories
+          for dir in artifacts/gfriendwrt-*; do
+            [ -d "$dir" ] || continue
+            # Artifact name format: gfriendwrt-<version>-<target>-<subtarget>-<profile>
+            name=$(basename "$dir")
+            # Remove prefix "gfriendwrt-"
+            rest=${name#gfriendwrt-}
+            # Split the rest by '-' into version, target, subtarget, profile
+            version=$(echo "$rest" | cut -d'-' -f1)
+            target=$(echo "$rest" | cut -d'-' -f2)
+            subtarget=$(echo "$rest" | cut -d'-' -f3)
+            profile=$(echo "$rest" | cut -d'-' -f4-)
+
+            # Find the actual firmware file(s) inside
+            fw_files=$(find "$dir" -type f \( -name "*.img.gz" -o -name "*.img" -o -name "*.bin" \) | head -1)
+            if [ -n "$fw_files" ]; then
+              fw_name=$(basename "$fw_files")
+              # Link to the uploaded artifact (GitHub will provide download links)
+              echo "| ${target}-${profile} | ${version} | ${target}/${subtarget} | ${profile} |" >> body.md
+            else
+              echo "| ${target}-${profile} | ${version} | ${target}/${subtarget} | ${profile} (no image found) |" >> body.md
+            fi
+          done
+
+          echo "" >> body.md
+          echo "Build commit: ${{ github.sha }}" >> body.md
+          echo "Build date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> body.md
+          echo "" >> body.md
+          echo "Login credentials: root / root" >> body.md
+          echo "" >> body.md
+          echo "WiFi: SSID 'GFWRT' with password 'gfwrt@123'" >> body.md
+          cat body.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "GFriendWRT ${{ github.ref_name }}"
+          body_path: body.md
+          files: artifacts/**
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
