@@ -214,10 +214,10 @@ jobs:
             echo "Using fallback packages"
           fi
 
-      - name: Disable signature check in ImageBuilder
-        working-directory: imagebuilder
-        run: |
-          sed -i 's/^option check_signature/# option check_signature/' repositories.conf
+      # - name: Disable signature check in ImageBuilder
+      #   working-directory: imagebuilder
+      #   run: |
+      #     sed -i 's/^option check_signature/# option check_signature/' repositories.conf
 
       - name: Build firmware image
         working-directory: imagebuilder
