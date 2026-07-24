@@ -187,6 +187,16 @@ jobs:
           fi
 
       # ------------------------------------------------------------------
+      # Copy compiled packages to ImageBuilder for final image assembly
+      # ------------------------------------------------------------------
+      - name: Copy collected custom packages to ImageBuilder
+        if: steps.pkgnames.outputs.names != ''
+        run: |
+          mkdir -p imagebuilder/packages
+          cp -v collected-packages/*.apk imagebuilder/packages/ || true
+          echo "Copied newly compiled packages to ImageBuilder"
+
+      # ------------------------------------------------------------------
       # Assemble final image – Copy all compiled
       # ------------------------------------------------------------------
       - name: Copy device-specific overlay
