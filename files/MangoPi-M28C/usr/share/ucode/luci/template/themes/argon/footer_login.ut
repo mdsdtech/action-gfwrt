@@ -16,14 +16,15 @@
 	Licensed to the public under the Apache License 2.0
 -#}
 
-		</div>
-		<footer class="mobile-hide" style="text-wrap: auto">
-			<div class="footer-content" style="display: flex; flex-wrap: wrap; gap: 0.5em; justify-content: end;">
-				<a class="luci-link" href="{{ version.disturl }}" target="_blank">🤍💙💜 GFriendWRT 🤍💙💜 by MDSDTech 🦅 | V260801</a>
-				<ul class="breadcrumb pull-right" id="modemenu" style="display:none"></ul>
-			</div>
-		</footer>
+</div>
+<!-- added style="text-wrap: auto" but on this page it is still not the best solution. I will take it to consideration next time :) -->
+<footer style="text-wrap: auto">
+	<div>
+		<a class="luci-link" href="{{ version.disturl }}" target="_blank">🤍💙💜 GFriendWRT 🤍💙💜</a><br />
+		<a class="luci-link" href="https://github.com/mdsdtech" target="_blank">🦅 MDSDTech 🦅</a>
 	</div>
+</footer>
+</div>
 </div>
 <script>
 	// thanks for Jo-Philipp Wich <jow@openwrt.org>
@@ -41,6 +42,5 @@
 		}
 	});
 </script>
-<script type="text/javascript">L.require('menu-argon')</script>
 </body>
 </html>

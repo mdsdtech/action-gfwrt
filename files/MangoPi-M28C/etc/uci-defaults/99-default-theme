@@ -1,0 +1,28 @@
+#!/bin/sh
+
+# Set hostname
+uci set system.@system[0].hostname='GFriendWRT'
+
+# Set timezone and zonename
+uci set system.@system[0].timezone='<+08>-8'
+uci set system.@system[0].zonename='Asia/Singapore'
+uci commit system
+# Set Luci theme to Argon
+uci set luci.main.mediaurlbase='/luci-static/alpha'
+
+# Commit all changes
+uci commit luci
+
+# Set Wireless SSID, Country and Password
+uci set wireless.@wifi-device[0].country='US'
+uci set wireless.@wifi-iface[0].ssid='GFWRT'
+uci set wireless.@wifi-iface[0].encryption='psk2'
+uci set wireless.@wifi-iface[0].key='gfwrt@123'
+uci set wireless.@wifi-iface[0].disabled='0'
+uci commit wireless
+
+# Reload system settings to apply hostname and timezone
+/etc/init.d/system reload
+
+# Reload network to apply wireless changes
+/etc/init.d/network reload

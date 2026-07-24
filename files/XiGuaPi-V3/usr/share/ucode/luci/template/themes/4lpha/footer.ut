@@ -5,7 +5,7 @@
 				<footer class="main-footer">
                     <span style="font-size: 0.875rem; color: #6B7280;">
                         <a href="{{ entityencode(version.disturl ?? '#', true) }}" target="_blank" rel="noreferrer">
-                            🤍💙💜 {{ version.distname }} 🤍💙💜 by MDSDTech 🦅 | V260520
+                            🤍💙💜 {{ version.distname }} 🤍💙💜 by MDSDTech 🦅 | V260801
                         {% if (lua_active): %}
                             | {{ _('Lua compatibility mode active') }}
                         {% endif %}

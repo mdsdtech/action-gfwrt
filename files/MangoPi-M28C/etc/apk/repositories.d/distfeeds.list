@@ -1,0 +1,8 @@
+https://downloads.immortalwrt.org/releases/25.12.1/targets/rockchip/armv8/packages/packages.adb
+https://downloads.immortalwrt.org/releases/25.12.1/targets/rockchip/armv8/kmods/6.12.94-1-9695dbb0de913313770c73e57b594a48/packages.adb
+https://downloads.immortalwrt.org/releases/25.12.1/packages/aarch64_generic/base/packages.adb
+https://downloads.immortalwrt.org/releases/25.12.1/packages/aarch64_generic/luci/packages.adb
+https://downloads.immortalwrt.org/releases/25.12.1/packages/aarch64_generic/packages/packages.adb
+https://downloads.immortalwrt.org/releases/25.12.1/packages/aarch64_generic/routing/packages.adb
+https://downloads.immortalwrt.org/releases/25.12.1/packages/aarch64_generic/telephony/packages.adb
+https://downloads.immortalwrt.org/releases/25.12.1/packages/aarch64_generic/video/packages.adb
