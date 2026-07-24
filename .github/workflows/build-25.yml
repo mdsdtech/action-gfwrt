@@ -114,6 +114,11 @@ jobs:
         run: |
           ./scripts/feeds install -a
 
+      - name: patching package quectel_cm_5G
+        working-directory: sdk
+        run: |
+          # Patch the feeds to fix any known issues (if needed)
+          sed -i 's/char \*d_name\[32\];/char d_name\[32\];/g' package/feeds/custom/quectel_cm_5G/src/device.c
       # ------------------------------------------------------------------
       # Apply compile‑time choices from configs/<device>.custom_opts
       # ------------------------------------------------------------------
