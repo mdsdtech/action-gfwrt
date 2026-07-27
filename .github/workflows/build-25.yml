@@ -72,12 +72,12 @@ jobs:
       # ------------------------------------------------------------------
       # Cache & download ImageBuilder
       # ------------------------------------------------------------------
-      - name: Cache ImageBuilder
-        id: cache-ib
-        uses: actions/cache@v4
-        with:
-          path: imagebuilder
-          key: ib-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}-v2
+      # - name: Cache ImageBuilder
+      #   id: cache-ib
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: imagebuilder
+      #     key: ib-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}-v2
 
       - name: Download ImageBuilder
         if: steps.cache-ib.outputs.cache-hit != 'true'
@@ -224,11 +224,6 @@ jobs:
             echo "Using fallback packages"
           fi
 
-      # - name: Disable signature check in ImageBuilder
-      #   working-directory: imagebuilder
-      #   run: |
-      #     sed -i 's/^option check_signature/# option check_signature/' repositories.conf
-
       - name: Build firmware image
         working-directory: imagebuilder
         run: |
@@ -249,6 +244,9 @@ jobs:
             mv -v "$f" "$dir/$newname"
           done
 
+      # ------------------------------------------------------------------
+      # Zip compiled custom packages
+      # ------------------------------------------------------------------
       - name: Zip compiled custom packages for release
         if: steps.pkgnames.outputs.names != ''
         run: |
@@ -259,22 +257,26 @@ jobs:
             cd collected-packages
             zip -r "../$ZIP_NAME" *.apk
             cd ..
-            
-            # The directory is guaranteed to exist now, and make image won't delete it
-            cp -v "$ZIP_NAME" imagebuilder/bin/targets/
             echo "Successfully created package archive: $ZIP_NAME"
           else
             echo "No compiled APKs found to zip."
           fi
 
       # ------------------------------------------------------------------
-      # Upload artifact
+      # Upload separate artifacts for Firmware and Packages
       # ------------------------------------------------------------------
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gfriendwrt-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}-${{ matrix.profile }}
+          name: gfriendwrt-firmware-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}-${{ matrix.profile }}
           path: imagebuilder/bin/targets/**/*
+
+      - name: Upload packages artifact
+        if: steps.pkgnames.outputs.names != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: gfriendwrt-packages-${{ matrix.version }}-${{ matrix.target }}-${{ matrix.subtarget }}-${{ matrix.profile }}
+          path: gfriendwrt-packages-*.zip
 
   release:
     needs: build
@@ -289,43 +291,101 @@ jobs:
       - name: Generate release description
         id: desc
         run: |
-          echo "### Devices in this release" > body.md
-          echo "" >> body.md
-          echo "| Device | Version | Target | Profile |" >> body.md
-          echo "|--------|---------|--------|---------|" >> body.md
+          cat << 'EOF' > body.md
+          ## 🚀 Release Assets
 
-          # Loop over downloaded artifact directories
-          for dir in artifacts/gfriendwrt-*; do
+          ### 💾 Firmware Images
+          Flash these to install or upgrade the complete operating system on your device.
+
+          | Profile | Version | Target Architecture |
+          |---------|---------|---------------------|
+          EOF
+
+          # Parse firmware artifacts
+          for dir in artifacts/gfriendwrt-firmware-*; do
             [ -d "$dir" ] || continue
-            # Artifact name format: gfriendwrt-<version>-<target>-<subtarget>-<profile>
             name=$(basename "$dir")
-            # Remove prefix "gfriendwrt-"
-            rest=${name#gfriendwrt-}
-            # Split the rest by '-' into version, target, subtarget, profile
+            rest=${name#gfriendwrt-firmware-}
             version=$(echo "$rest" | cut -d'-' -f1)
             target=$(echo "$rest" | cut -d'-' -f2)
             subtarget=$(echo "$rest" | cut -d'-' -f3)
             profile=$(echo "$rest" | cut -d'-' -f4-)
 
-            # Find the actual firmware file(s) inside
-            fw_files=$(find "$dir" -type f \( -name "*.img.gz" -o -name "*.img" -o -name "*.bin" \) | head -1)
-            if [ -n "$fw_files" ]; then
-              fw_name=$(basename "$fw_files")
-              # Link to the uploaded artifact (GitHub will provide download links)
-              echo "| ${target}-${profile} | ${version} | ${target}/${subtarget} | ${profile} |" >> body.md
-            else
-              echo "| ${target}-${profile} | ${version} | ${target}/${subtarget} | ${profile} (no image found) |" >> body.md
-            fi
+            echo "| **${profile}** | ${version} | \`${target}/${subtarget}\` |" >> body.md
           done
 
-          echo "" >> body.md
-          echo "Build commit: ${{ github.sha }}" >> body.md
-          echo "Build date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> body.md
-          echo "" >> body.md
-          echo "Login credentials: root / root" >> body.md
-          echo "" >> body.md
-          echo "WiFi: SSID 'GFWRT' with password 'gfwrt@123'" >> body.md
+          cat << 'EOF' >> body.md
+
+          ### 📦 Offline Custom Package Archives (.zip)
+          Download these archives if you want to manually install or update custom `.apk` packages via LuCI or CLI.
+
+          | Package Archive Name |
+          |----------------------|
+          EOF
+
+          found_zips=0
+          for zipfile in $(find artifacts/ -type f -name "*.zip" | sort -u); do
+            zipname=$(basename "$zipfile")
+            echo "| \`$zipname\` |" >> body.md
+            found_zips=1
+          done
+
+          if [ "$found_zips" -eq 0 ]; then
+            echo "| *No custom package archives built for this release.* |" >> body.md
+          fi
+
+          cat << 'EOF' >> body.md
+
+          ---
+          #### 🔑 Default System Credentials
+          * **Management IP:** `192.168.1.1`
+          * **Login / Password:** `root` / `root`
+          * **WiFi SSID:** `GFWRT`
+          * **WiFi Password:** `gfwrt@123`
+
+          EOF
+
           cat body.md
+      # - name: Generate release description
+      #   id: desc
+      #   run: |
+      #     echo "### Devices in this release" > body.md
+      #     echo "" >> body.md
+      #     echo "| Device | Version | Target | Profile |" >> body.md
+      #     echo "|--------|---------|--------|---------|" >> body.md
+
+      #     # Loop over downloaded artifact directories
+      #     for dir in artifacts/gfriendwrt-*; do
+      #       [ -d "$dir" ] || continue
+      #       # Artifact name format: gfriendwrt-<version>-<target>-<subtarget>-<profile>
+      #       name=$(basename "$dir")
+      #       # Remove prefix "gfriendwrt-"
+      #       rest=${name#gfriendwrt-}
+      #       # Split the rest by '-' into version, target, subtarget, profile
+      #       version=$(echo "$rest" | cut -d'-' -f1)
+      #       target=$(echo "$rest" | cut -d'-' -f2)
+      #       subtarget=$(echo "$rest" | cut -d'-' -f3)
+      #       profile=$(echo "$rest" | cut -d'-' -f4-)
+
+      #       # Find the actual firmware file(s) inside
+      #       fw_files=$(find "$dir" -type f \( -name "*.img.gz" -o -name "*.img" -o -name "*.bin" \) | head -1)
+      #       if [ -n "$fw_files" ]; then
+      #         fw_name=$(basename "$fw_files")
+      #         # Link to the uploaded artifact (GitHub will provide download links)
+      #         echo "| ${target}-${profile} | ${version} | ${target}/${subtarget} | ${profile} |" >> body.md
+      #       else
+      #         echo "| ${target}-${profile} | ${version} | ${target}/${subtarget} | ${profile} (no image found) |" >> body.md
+      #       fi
+      #     done
+
+      #     echo "" >> body.md
+      #     echo "Build commit: ${{ github.sha }}" >> body.md
+      #     echo "Build date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> body.md
+      #     echo "" >> body.md
+      #     echo "Login credentials: root / root" >> body.md
+      #     echo "" >> body.md
+      #     echo "WiFi: SSID 'GFWRT' with password 'gfwrt@123'" >> body.md
+      #     cat body.md
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
