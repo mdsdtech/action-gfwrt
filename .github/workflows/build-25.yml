@@ -93,8 +93,8 @@ jobs:
         working-directory: sdk
         run: |
           # Avoid appending duplicate feed lines
-          if ! grep -q "src-git custom https://github.com/mdsdtech/modem_feeds;custom" feeds.conf.default; then
-            echo "src-git custom https://github.com/mdsdtech/modem_feeds;custom" >> feeds.conf.default
+          if ! grep -q "src-git custom https://github.com/mdsdtech/modem_feeds;custom25" feeds.conf.default; then
+            echo "src-git custom https://github.com/mdsdtech/modem_feeds;custom25" >> feeds.conf.default
           fi
           # Remove any pre‑existing cloned directories (from cache) to allow fresh clone
           rm -rf package/kmod-fb-tft-gc9307 package/xgp-v3-screen
